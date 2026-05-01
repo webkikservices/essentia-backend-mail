@@ -187,6 +187,9 @@ app.post('/api/contact', async (req, res) => {
             body: JSON.stringify(crmPayload)
         });
 
+        const responseData = await crmResponse.json(); // CRM kya bol raha hai?
+console.log("CRM Actual Response:", responseData);
+
         if (!crmResponse.ok) {
             console.error("CRM push failed with status:", crmResponse.status);
         } else {
