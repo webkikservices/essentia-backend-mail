@@ -202,14 +202,17 @@ app.post('/api/contact', async (req, res) => {
             body: JSON.stringify(crmPayload)
         });
 
-        const result = await crmResponse.json(); 
-console.log("CRM full response:", JSON.stringify(result));
-
-         if (!crmResponse.ok) {
-            console.error("CRM push failed with status:", crmResponse.status);
-        } else {
-            console.log("Lead pushed to CRM successfully!");
-        }
+        if (!crmResponse.ok) {
+    const errorText = await crmResponse.text(); // Yahan hum HTML text capture karenge
+    console.error("CRM FAILED! Status:", crmResponse.status);
+    console.error("CRM HTML Error Page:", errorText); // YE LOGS MEIN ERROR DIKHAYEGA
+    res.status(500).json({ error: 'CRM Integration Failed', details: errorText });
+    return;
+} else {
+    const responseData = await crmResponse.json();
+    console.log("Lead pushed to CRM successfully!", responseData);
+    res.status(200).json({ message: 'Enquiry sent to email and CRM successfully' });
+}
 
         res.status(200).json({ message: 'Enquiry sent to email and CRM successfully' });
     } catch (error) {
