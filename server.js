@@ -192,7 +192,7 @@ app.post('/api/contact', async (req, res) => {
     "description": `Subject: ${subject} | Message: ${message}`
 };
 
-        const crmResponse = await fetch('https://haryana.my-co.app/essentia/crm/api/v1/lead/webhook', {
+        const crmResponse = await fetch('https://crm.my-company.app/api/v1/lead/webhook', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
