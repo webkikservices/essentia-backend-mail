@@ -177,7 +177,7 @@ app.post('/api/contact', async (req, res) => {
             "leadPriority": "1"
         };
 
-        const crmResponse = await fetch('https://haryana.my-co.app/api/v1/lead/webhook', {
+        const crmResponse = await fetch('https://crm.my-company.app/api/v1/lead/webhook', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
