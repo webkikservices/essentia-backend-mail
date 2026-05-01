@@ -166,31 +166,31 @@ app.post('/api/contact', async (req, res) => {
         });
 
         // 2. Ab CRM me Lead Push Karo
-        // const crmPayload = {
-        //     "firstName": name || "",
-        //     "lastName": "",
-        //     "email": email || "",
-        //     "mobile": phone || "",
-        //     "phoneCountryCode": "91",
-        //     "countryCode": "91",
-        //     "description": `Subject: ${subject} | Message: ${message}`,
-        //     "leadPriority": "1"
-        // };
         const crmPayload = {
-    "firstName": name || "Guest",
-    "lastName": "",
-    "designation": "N/A", // Yeh field CRM screenshot mein thi
-    "email": email || "",
-    "countryCode": "91",
-    "mobile": phone || "0000000000",
-    "phoneCountryCode": "91",
-    "phone": phone || "0000000000",
-    "expectedRevenue": "0",
-    "companyName": "Website Lead", // Default company name
-    "companyPincode": "000000",
-    "leadPriority": "1",
-    "description": `Subject: ${subject} | Message: ${message}`
-};
+            "firstName": name || "",
+            "lastName": "",
+            "email": email || "",
+            "mobile": phone || "",
+            "phoneCountryCode": "91",
+            "countryCode": "91",
+            "description": `Subject: ${subject} | Message: ${message}`,
+            "leadPriority": "1"
+        };
+//         const crmPayload = {
+//     "firstName": name || "Guest",
+//     "lastName": "",
+//     "designation": "N/A", // Yeh field CRM screenshot mein thi
+//     "email": email || "",
+//     "countryCode": "91",
+//     "mobile": phone || "0000000000",
+//     "phoneCountryCode": "91",
+//     "phone": phone || "0000000000",
+//     "expectedRevenue": "0",
+//     "companyName": "Website Lead", // Default company name
+//     "companyPincode": "000000",
+//     "leadPriority": "1",
+//     "description": `Subject: ${subject} | Message: ${message}`
+// };
 
         const crmResponse = await fetch('https://crm.my-company.app/api/v1/lead/webhook', {
             method: 'POST',
