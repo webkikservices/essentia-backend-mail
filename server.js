@@ -187,14 +187,11 @@ app.post('/api/contact', async (req, res) => {
             body: JSON.stringify(crmPayload)
         });
 
-        if (!crmResponse.ok) {
-    const errorText = await crmResponse.text(); // JSON ki jagah TEXT read karo
-    console.error("CRM Error Status:", crmResponse.status);
-    console.error("CRM HTML Error Page:", errorText); // Yahan pata chalega ki server kya error de raha hai
-} else {
-    const responseData = await crmResponse.json();
-    console.log("Lead pushed to CRM successfully!", responseData);
-}
+         if (!crmResponse.ok) {
+            console.error("CRM push failed with status:", crmResponse.status);
+        } else {
+            console.log("Lead pushed to CRM successfully!");
+        }
 
         res.status(200).json({ message: 'Enquiry sent to email and CRM successfully' });
     } catch (error) {
