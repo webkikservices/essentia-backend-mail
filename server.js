@@ -197,21 +197,29 @@ app.post('/api/career', upload.single('resume'), async (req, res) => {
 app.get('/api/instagram/all-posts', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 24;
-
     res.set('Cache-Control', 'public, max-age=300');
 
     try {
-        if (postsCache.data) {
-            const start = (page - 1) * limit;
-            const end = start + limit;
-            return res.status(200).json({
-                success: true,
-                total: postsCache.data.length,
-                page, limit,
-                hasMore: end < postsCache.data.length,
-                data: postsCache.data.slice(start, end)
-            });
+        if (!postsCache.data) await warmPostsCache();   // wait, no half-baked fallback
+
+        if (!postsCache.data) {
+            return res.status(503).json({ success: false, error: 'Posts loading, thodi der me retry' });
         }
+
+        const start = (page - 1) * limit;
+        const end = start + limit;
+        return res.status(200).json({
+            success: true,
+            total: postsCache.data.length,
+            page, limit,
+            hasMore: end < postsCache.data.length,
+            data: postsCache.data.slice(start, end)
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+}
 
         // Cache nahi — seedha fetch, background mein warm karo
         const token = process.env.INSTAGRAM_ACCESS_TOKEN;
