@@ -70,13 +70,17 @@ async function fetchAllPostsFromIG(token, userId) {
 }
 
 // ============================================
-// INSTAGRAM — IN-MEMORY CACHE
+// INSTAGRAM — IN-MEMORY CACHE (Vercel-friendly, lazy warm)
 // ============================================
-let postsCache = { data: null, lastFetched: null, isFetching: false };
-
+let postsCache = { data: null, lastFetched: null };
 let warmPromise = null;
-async function warmPostsCache() {
+const CACHE_TTL = 30 * 60 * 1000; // 30 min
+
+async function getPosts() {
+    const fresh = postsCache.data && (Date.now() - postsCache.lastFetched < CACHE_TTL);
+    if (fresh) return postsCache.data;
     if (warmPromise) return warmPromise;
+
     warmPromise = (async () => {
         console.log('🔄 Warming Instagram cache...');
         try {
@@ -84,43 +88,18 @@ async function warmPostsCache() {
                 process.env.INSTAGRAM_ACCESS_TOKEN,
                 process.env.INSTAGRAM_USER_ID
             );
-            postsCache.data = posts;
-            postsCache.lastFetched = Date.now();
+            postsCache = { data: posts, lastFetched: Date.now() };
             console.log(`✅ Cache ready! ${posts.length} posts cached.`);
+            return posts;
         } catch (err) {
             console.error('❌ Cache failed:', err.message);
+            throw err;
         } finally {
             warmPromise = null;
         }
     })();
     return warmPromise;
 }
-
-// ============================================
-// INSTAGRAM — TOKEN AUTO REFRESH
-// ============================================
-async function refreshInstagramToken() {
-    try {
-        const token = process.env.INSTAGRAM_ACCESS_TOKEN;
-        const url = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.APP_ID}&client_secret=${process.env.APP_SECRET}&fb_exchange_token=${token}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.access_token) {
-            process.env.INSTAGRAM_ACCESS_TOKEN = data.access_token;
-            console.log('✅ Token refreshed!');
-        } else {
-            console.error('❌ Token refresh failed:', data);
-        }
-    } catch (err) {
-        console.error('❌ Token refresh error:', err);
-    }
-}
-
-// Server start timers
-setTimeout(refreshInstagramToken, 10000);
-setTimeout(warmPostsCache, 5000);
-setInterval(refreshInstagramToken, 50 * 24 * 60 * 60 * 1000);
-setInterval(warmPostsCache, 30 * 60 * 1000);
 
 // ============================================
 // ROUTES — CONTACT
@@ -193,76 +172,46 @@ app.post('/api/career', upload.single('resume'), async (req, res) => {
 // ROUTES — INSTAGRAM
 // ============================================
 
-// 1. ALL POSTS — Cache + Pagination (FAST!)
+// 1. ALL POSTS — Cache + Pagination
 app.get('/api/instagram/all-posts', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 24;
     res.set('Cache-Control', 'public, max-age=300');
 
     try {
-        if (!postsCache.data) await warmPostsCache();   // wait, no half-baked fallback
+        const all = await getPosts();
 
-        if (!postsCache.data) {
-            return res.status(503).json({ success: false, error: 'Posts loading, thodi der me retry' });
+        if (!all || all.length === 0) {
+            return res.status(200).json({
+                success: true, total: 0, page, limit, hasMore: false, data: []
+            });
         }
 
         const start = (page - 1) * limit;
         const end = start + limit;
         return res.status(200).json({
             success: true,
-            total: postsCache.data.length,
+            total: all.length,
             page, limit,
-            hasMore: end < postsCache.data.length,
-            data: postsCache.data.slice(start, end)
+            hasMore: end < all.length,
+            data: all.slice(start, end)
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-
-        // Cache nahi — seedha fetch, background mein warm karo
-        const token = process.env.INSTAGRAM_ACCESS_TOKEN;
-        const userId = process.env.INSTAGRAM_USER_ID;
-        const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count';
-        const url = `https://graph.facebook.com/v19.0/${userId}/media?fields=${fields}&limit=${limit}&access_token=${token}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.error) return res.status(400).json({ success: false, error: data.error.message });
-
-        warmPostsCache();
-
-        res.status(200).json({
-            success: true, total: null, page: 1, limit,
-            hasMore: !!data.paging?.next,
-            data: data.data
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error('all-posts error:', error.message);
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // 2. LATEST POSTS
 app.get('/api/instagram/latest', async (req, res) => {
-    const token = process.env.INSTAGRAM_ACCESS_TOKEN;
-    const userId = process.env.INSTAGRAM_USER_ID;
-    const limit = req.query.limit || 12;
+    const limit = parseInt(req.query.limit) || 12;
     try {
-        // Cache se nikalo agar available ho
-        if (postsCache.data) {
-            return res.status(200).json({
-                success: true,
-                count: Math.min(limit, postsCache.data.length),
-                data: postsCache.data.slice(0, limit)
-            });
-        }
-        const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count';
-        const url = `https://graph.facebook.com/v19.0/${userId}/media?fields=${fields}&limit=${limit}&access_token=${token}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.error) return res.status(400).json({ success: false, error: data.error.message });
-        res.status(200).json({ success: true, count: data.data.length, data: data.data });
+        const all = await getPosts();
+        res.status(200).json({
+            success: true,
+            count: Math.min(limit, all.length),
+            data: all.slice(0, limit)
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to fetch posts' });
     }
@@ -271,10 +220,8 @@ app.get('/api/instagram/latest', async (req, res) => {
 // 3. REELS
 app.get('/api/instagram/reels', async (req, res) => {
     try {
-        const source = postsCache.data || await fetchAllPostsFromIG(
-            process.env.INSTAGRAM_ACCESS_TOKEN, process.env.INSTAGRAM_USER_ID
-        );
-        const reels = source.filter(p => p.media_type === 'VIDEO');
+        const all = await getPosts();
+        const reels = all.filter(p => p.media_type === 'VIDEO');
         res.status(200).json({ success: true, count: reels.length, data: reels });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to fetch reels' });
@@ -357,8 +304,8 @@ app.post('/webhook/instagram', (req, res) => {
         body.entry?.forEach(entry => {
             entry.changes?.forEach(change => {
                 if (change.field === 'media') {
-                    console.log('🆕 New post! Refreshing cache...');
-                    warmPostsCache(); // Nai post aate hi cache refresh
+                    console.log('🆕 New post! Invalidating cache...');
+                    postsCache = { data: null, lastFetched: null }; // next request lazy-warm karega
                 }
             });
         });
@@ -372,5 +319,9 @@ app.post('/webhook/instagram', (req, res) => {
 // SERVER START
 // ============================================
 module.exports = app;
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// Local dev ke liye hi listen karo — Vercel pe app export hota hai
+if (require.main === module) {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+}
