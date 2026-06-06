@@ -74,23 +74,26 @@ async function fetchAllPostsFromIG(token, userId) {
 // ============================================
 let postsCache = { data: null, lastFetched: null, isFetching: false };
 
+let warmPromise = null;
 async function warmPostsCache() {
-    if (postsCache.isFetching) return;
-    postsCache.isFetching = true;
-    console.log('🔄 Warming Instagram cache...');
-    try {
-        const posts = await fetchAllPostsFromIG(
-            process.env.INSTAGRAM_ACCESS_TOKEN,
-            process.env.INSTAGRAM_USER_ID
-        );
-        postsCache.data = posts;
-        postsCache.lastFetched = Date.now();
-        console.log(`✅ Cache ready! ${posts.length} posts cached.`);
-    } catch (err) {
-        console.error('❌ Cache failed:', err.message);
-    } finally {
-        postsCache.isFetching = false;
-    }
+    if (warmPromise) return warmPromise;
+    warmPromise = (async () => {
+        console.log('🔄 Warming Instagram cache...');
+        try {
+            const posts = await fetchAllPostsFromIG(
+                process.env.INSTAGRAM_ACCESS_TOKEN,
+                process.env.INSTAGRAM_USER_ID
+            );
+            postsCache.data = posts;
+            postsCache.lastFetched = Date.now();
+            console.log(`✅ Cache ready! ${posts.length} posts cached.`);
+        } catch (err) {
+            console.error('❌ Cache failed:', err.message);
+        } finally {
+            warmPromise = null;
+        }
+    })();
+    return warmPromise;
 }
 
 // ============================================
