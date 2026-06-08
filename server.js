@@ -22,6 +22,8 @@ const mailTransporter = nodemailer.createTransport({
     host: 'smtp.office365.com',
     port: 587,
     secure: false,
+    pool: true,              // <-- add
+    maxConnections: 5,       // <-- add
     auth: { user: process.env.CONTACT_EMAIL, pass: process.env.CONTACT_PASS },
     tls: { ciphers: 'SSLv3', rejectUnauthorized: false }
 });
@@ -114,68 +116,67 @@ setInterval(warmPostsCache, 30 * 60 * 1000);
 // ============================================
 // ROUTES — CONTACT
 // ============================================
-app.post('/api/contact', async (req, res) => {
+app.post('/api/contact', (req, res) => {
     const { name, email, phone, subject, message } = req.body;
-    try {
-        await mailTransporter.sendMail({
+
+    // Turant response — user yahan ruk-ta nahi
+    res.status(200).json({ message: 'Enquiry sent successfully' });
+
+    // Email + CRM background mein
+    (async () => {
+        // Email
+        mailTransporter.sendMail({
             from: process.env.CONTACT_EMAIL,
             to: process.env.CONTACT_EMAIL,
             subject: `New Contact Inquiry: ${subject}`,
             text: `Name: ${name}\nPhone: ${phone}\nEmail: ${email}\nMessage: ${message}`
-        });
+        }).catch(err => console.error('Contact Mail Error:', err.message));
 
-        const crmPayload = {
-            firstName: name || '', lastName: '',
-            email: email || '', mobile: phone || '',
-            phoneCountryCode: '91', countryCode: '91',
-            description: `Subject: ${subject} | Message: ${message}`,
-            leadPriority: '1'
-        };
-
-        const crmResponse = await fetch('https://crm.my-company.app/api/v1/lead/webhook', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'authToken': 'VWZpKCo86kWL51bPx3w5Bg==.pW1kkOIbX+VQTRD7FsboKw==',
-                'timeZone': 'Asia/Calcutta'
-            },
-            body: JSON.stringify(crmPayload)
-        });
-
-        if (!crmResponse.ok) {
-            const errorText = await crmResponse.text();
-            console.error('CRM FAILED:', crmResponse.status, errorText);
-            return res.status(500).json({ error: 'CRM Integration Failed' });
+        // CRM
+        try {
+            const crmPayload = {
+                firstName: name || '', lastName: '',
+                email: email || '', mobile: phone || '',
+                phoneCountryCode: '91', countryCode: '91',
+                description: `Subject: ${subject} | Message: ${message}`,
+                leadPriority: '1'
+            };
+            const crmResponse = await fetch('https://crm.my-company.app/api/v1/lead/webhook', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'authToken': 'VWZpKCo86kWL51bPx3w5Bg==.pW1kkOIbX+VQTRD7FsboKw==',
+                    'timeZone': 'Asia/Calcutta'
+                },
+                body: JSON.stringify(crmPayload)
+            });
+            if (!crmResponse.ok) {
+                console.error('CRM FAILED:', crmResponse.status, await crmResponse.text());
+            } else {
+                console.log('Lead pushed to CRM:', await crmResponse.json());
+            }
+        } catch (err) {
+            console.error('CRM Error:', err.message);
         }
-
-        const responseData = await crmResponse.json();
-        console.log('Lead pushed to CRM:', responseData);
-        res.status(200).json({ message: 'Enquiry sent successfully' });
-    } catch (error) {
-        console.error('Contact API Error:', error);
-        res.status(500).json({ error: 'Failed to process request' });
-    }
+    })();
 });
 
 // ============================================
 // ROUTES — CAREER  (ab sirf info@ pe jayega)
 // ============================================
-app.post('/api/career', upload.single('resume'), async (req, res) => {
+app.post('/api/career', upload.single('resume'), (req, res) => {
     const { name, email, phone, category, portfolio, message } = req.body;
     const file = req.file;
-    try {
-        await mailTransporter.sendMail({
-            from: process.env.CONTACT_EMAIL,
-            to: process.env.CONTACT_EMAIL,
-            subject: `New Job Application: ${category} - ${name}`,
-            text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nCategory: ${category}\nPortfolio: ${portfolio}\nMessage: ${message}`,
-            attachments: file ? [{ filename: file.originalname, content: file.buffer }] : []
-        });
-        res.status(200).json({ message: 'Application sent successfully' });
-    } catch (error) {
-        console.error('Career Mail Error:', error);
-        res.status(500).json({ error: 'Failed to send career email' });
-    }
+
+    res.status(200).json({ message: 'Application sent successfully' });
+
+    mailTransporter.sendMail({
+        from: process.env.CONTACT_EMAIL,
+        to: process.env.CONTACT_EMAIL,
+        subject: `New Job Application: ${category} - ${name}`,
+        text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nCategory: ${category}\nPortfolio: ${portfolio}\nMessage: ${message}`,
+        attachments: file ? [{ filename: file.originalname, content: file.buffer }] : []
+    }).catch(err => console.error('Career Mail Error:', err.message));
 });
 
 // ============================================
